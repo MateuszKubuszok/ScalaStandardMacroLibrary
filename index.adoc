@@ -4,31 +4,222 @@
 :revealjs_help: true
 
 
-= Title Slide
+= Can we have the Standard Library for Macros?
 
-== Slide One
+---
 
-[%step]
-* Foo
-* Bar
-* World
-
-== Slide Two
-
-Hello World - Good Bye Cruel World
+Mateusz Kubuszok
 
 [NOTE.speaker]
 --
-Actually things aren't that bad
+Before answering the question in the title, we need to explain a few more things.
 --
 
-== Source code
+== What is a Macro?
+
+[NOTE.speaker]
+--
+First of all, what is a macro?
+--
+
+=== !
+
+[%step]
+ * a code generator
+ * run during compilation by the compiler
+ * working on the AST
+ * _pretending_ to be a method
+ * `Mirror` s, `inline if` s, `inline match` , `summonInline` , `summonFrom` , ... - metaprogramming but not macros
+
+[NOTE.speaker]
+--
+...in other words the thing in the next slide.
+--
+
+=== !
 
 [source, scala]
 --
-val test = task
-  .map(identity)
-  .flatMap(a => Something(b))
-  .runSyncUnsafe
-  // result
+// Scala 2
+import scala.language.experimental.macros
+
+def macroMethod[A](a: A): SthOf[A] =
+  macro macroMethodImpl[A]
+
+import scala.reflect.macros.blackbox
+
+def macroMethodImpl[A: c.WeakTypeTag](
+  c: blackbox.Context
+)(a: c.Expr[A]): c.Expr[SthOf[A]] = {
+  import c.universe._
+  ...
+}
 --
+
+[source, scala]
+--
+// Scala 3
+import scala.quoted.*
+
+inline def macroMethod[A](a: A): SthOf[A] =
+  ${ macroMethodImpl[A]('{ a }) }
+
+def macroMethodImpl[A: Type](
+  using q: Quotes
+)(a: Expr[A]): Expr[SthOf[A]] = {
+  import q.reflect.*
+  ...
+}
+--
+
+[NOTE.speaker]
+--
+This is what I would mean, when I am talking about macros.
+--
+
+== Why do we need macros?
+
+[NOTE.speaker]
+--
+Perhaps we don't, and this whole presentation is pointless.
+--
+
+=== Alternatives
+
+[%step]
+ * Shapeless (Scala 2)
+ * `inline` , Mirrors & `scala.compiletime` (Scala 3)
+ * Magnolia (Scala 2 & 3)
+ * runtime reflection
+ 
+[NOTE.speaker]
+--
+`Shapeless` and `Mirror` s, usually both rely on summoning implicits, and we end up doing a prolog-like programming with method signatures. 
+
+Magnolia on Scala 2 requires calling a macro, but we don't need to write it, we write some runtime methods.
+
+Runtime moves all magic to the runtime, so we have to run the code to make sure it works.
+
+All 4 of them have gentler learning curves that macros, which is why tutorials favor them.
+
+And why especially the first 3 dominated the Scala ecosystem.
+--
+
+=== But
+
+=== !
+
+(slajd na przykłady z errorami, benchmarkami kompilacji i runtime)
+
+=== !
+
+(slajd na przykład z logami z makra)
+
+=== In other words
+
+=== Shapeless/Mirrors/etc
+
+You:
+
+[%step]
+ * easy start
+ * rapid development
+ * everything feels lean
+ * everything feels prinicipled and correct
+
+Your users:
+
+[%step]
+ * pay with longer compilation times
+ * pay with less performant runtime
+ * pay with more time spend if the code doesn't work
+
+[NOTE.speaker]
+--
+When I look at this, and think of all the popular libraries based on that, I feel like they are:
+
+ * widely-adopted
+ * feature-rich
+ * proof-of-concept-level quality
+ * liabilities
+--
+
+=== Macros
+
+You:
+
+[%step]
+ * longer setup
+ * no batteries included
+ * development feel clunky
+ * everything feels like a hack
+
+Your users:
+
+[%step]
+ * _may_ get better compilation times (than alternatives)
+ * _may_ get more performant runtime
+ * _may_ get better errors messages
+ * *or* may get an undebugabble mess that cannot be understood even by the author
+
+[NOTE.speaker]
+--
+(Before may and or) - and our users deserve it!
+
+So this on the other hands is like a hazard game.
+
+If you want to provide:
+ * nice compilation times
+ * nice runtime performance
+ * nice errors messages and debugging experience
+
+then macros are the only game in town.
+
+But with no guarantee of success.
+
+It may sound unfounded, especially since Scala 3 macros are supposedly principled, so let's take a look at some examples.
+--
+
+== Some examples
+
+TODO: klejenie drzewa na pałę
+TODO: Scala 3 dla odmiany principled
+
+TODO: przykłady pattern matching typów w Scali 2
+TODO: Scala 3 dla odminany ogarnia
+
+TODO: knownDirectSubclasses + generyki
+TODO: Scala 3 też posysa
+
+TODO: wołanie arbitralnego ctora w Scali 3
+TODO: w Scali 2 za to quasiquotes
+
+TODO: pattern matching w Scali 3
+TODO: Scala 2 dla odmiany ogarnia
+
+TODO: no cats/zio/etc in macros so ergonomy is not great
+
+TODO: println debugging
+
+== Let us imagine a better API
+
+TODO: first off, MIO
+
+TODO: for now let's use that pseudocode syntax for quotes
+
+TODO: extracting types and matching them
+
+TODO: calling ctors and methods
+
+TODO: pattern matching on subtypes
+
+== Actually, it's already possible
+
+demo example
+
+== Summary
+
+
+
+
+
