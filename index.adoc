@@ -115,9 +115,13 @@ And why especially the first 3 dominated the Scala ecosystem.
 
 (slajd na przykłady z errorami, benchmarkami kompilacji i runtime)
 
+TODO
+
 === !
 
 (slajd na przykład z logami z makra)
+
+TODO
 
 === In other words
 
@@ -195,6 +199,7 @@ It may sound unfounded, especially since Scala 3 macros are supposedly principle
 
 === Quoting and Splicing
 
+[%step]
 [cols="1,1"]
 |===
 | Scala 2 (Quasiquotes)
@@ -244,6 +249,7 @@ So, this looks like an issue only for Scala 2.
 
 === Matching Types
 
+[%step]
 [.small]
 [cols="1,1"]
 |===
@@ -292,6 +298,7 @@ Scala 3 is quotes easy to read.
 
 === Instantiating an{nbsp}Arbitrary Type
 
+[%step]
 [cols="1,1"]
 |===
 | Scala 2 (Quasiquotes)
@@ -335,6 +342,7 @@ Scala 3, allows quoting and splicing, but only for whole expressions. Pieces tha
 
 === Constructing a Pattern Match
 
+[%step]
 [.small]
 [cols="1,1"]
 |===
@@ -414,6 +422,7 @@ so we would have to write multiple versions and check which applies.
 
 === Sealed Trait's Children
 
+[%step]
 [.small]
 [cols="1,1"]
 |===
@@ -422,12 +431,50 @@ so we would have to write multiple versions and check which applies.
 a|
 [source, scala]
 --
-TODO
+val symbol = c.weakTypeOf[A]
+  .typeSymbol
+if (symbol.isSealed) {
+  // force Symbol initialization
+  symbol.typeSignature 
+  val children = symbol.asClass
+    .knownDirectSubclasses.map{sym =>
+      val sEta = sym.asType
+        .toType.etaExpand
+      sEta.finalResultType
+          .substituteTypes(
+        sEta.baseType(symbol)
+          .typeArgs.map(_.typeSymbol),
+        c.weakTypeOf[A].typeArgs
+      )
+    }
+  ...
+} else {
+  ...
+}
 --
 a|
 [source, scala]
 --
-TODO
+val A = TypeRepr.of[A]
+val sym = A.typeSymbol
+if (sym.flags.is(Flags.Sealed)) {
+  val c = sym.children.map: sub =>
+    sub.primaryConstructor
+        .paramSymss match:
+      // manually reapply type params
+      case syms :: _
+      if syms.exists(_.isType) =>
+        val param2tpe = sub.typeRef
+          .baseType(sym).typeArgs
+          .map(_.typeSymbol.name)
+          .zip(A.typeArgs).toMap
+        val types = syms.map(_.name)
+          .map(param2tpe)
+        sub.typeRef.appliedTo(types)
+      // subtype is monomorphic
+      case _ => sub.typeRef
+  ...
+} else { ... }
 --
 |===
 
