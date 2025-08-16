@@ -760,6 +760,28 @@ Enum.parse[A] match {
 
 with **Hearth**
 
+== Hearth
+
+[cols="1,1"]
+|===
+a|
+[%step]
+image::img/macro-in-macros.png[Macro in macros]
+a|
+[%step]
+image::img/compiler-plugin.png[Compiler plugin]
+|===
+
+[NOTE.speaker]
+--
+Hearth is a Proof-of-Concept library, that I've been working on for the last few months.
+
+It aims to make it simpler to write macros.
+
+Even if making it easier requires expanding macros in macros,
+or using a dedicated compiler plugin that works on untyped trees.
+--
+
 == Hearth demo
 
 [.small]
@@ -870,19 +892,23 @@ private[demo] object ShowMacros {
 
 === !
 
+[%step]
 [.small]
 [source, scala]
 --
-sealed private[demo] trait DerivationError
+private[demo] sealed trait DerivationError
     extends scala.util.control.NoStackTrace
     with Product
     with Serializable
+
 private[demo] object DerivationError {
+
   final case class UnsupportedType(typeName: String) extends DerivationError
   ... // other cases
 }
 --
 
+[%step]
 [.small]
 [source, scala]
 --
@@ -910,6 +936,7 @@ private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
 
 === !
 
+[%step]
 [.small]
 [source, scala]
 --
@@ -922,6 +949,7 @@ private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
 private type Attempt[A] = MIO[Option[Expr[A]]]
 --
 
+[%step]
 [.small]
 [source, scala]
 --
@@ -943,6 +971,7 @@ private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
   }
 --
 
+[%step]
 [.small]
 [source, scala]
 --
@@ -961,25 +990,25 @@ private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...
 
 === !
 
+[%step]
 [.small]
 [source, scala]
 --
 // inside Show companion
 sealed trait LogDerivation
-object LogDerivation {
-  private object Instance extends LogDerivation
-  def apply(): LogDerivation = Instance
-}
+object LogDerivation extends LogDerivation
 --
 
+[%step]
 [.small]
 [source, scala]
 --
 // Put outside of [[Show]] companion to prevent the implicit
 // from being summoned automatically!
-implicit val logDerivation: Show.LogDerivation = Show.LogDerivation()
+implicit val logDerivation: Show.LogDerivation = Show.LogDerivation
 --
 
+[%step]
 [.small]
 [source, scala]
 --
@@ -1001,6 +1030,7 @@ private def shouldWeLogDerivation: Boolean = {
 }
 --
 
+[%step]
 [.small]
 [source, scala]
 --
@@ -1023,17 +1053,19 @@ image::img/logging-vscode.png[Log in VS Code]
 
 [NOTE.speaker]
 --
-Hearth is currently a Proof-of-Concept.
+I hope that I managed to show why good macros could be a better alternative to the Shapeless/Mirrors/etc.
 
-There is much to do there, and I don't consider it yet ready for a release.
+I also hope I managed to explain why currently, they are not so easy to use.
 
-But I hope, that it proved to you that macros can be sane.
-
-That we can for most common use cases we can provide some sane API.
+Finally, I hope, that it proved to you, that we can make macros sane.
 
 That the result could be easy to understand and debug.
 
 That it is in our reach to replace the alternatives with something that compiles faster, **and** runs faster.
 
-It doesn't have to be Hearth, it might be some other library, but I hope that I inspired you to try.
+Hearth is currently a Proof-of-Concept.
+
+There is much to do there, and I don't consider it yet ready for a release.
+
+But it doesn't have to be Hearth, it might be some other library that takes us there, and maybe this pressentation inspired some of you to try.
 --
