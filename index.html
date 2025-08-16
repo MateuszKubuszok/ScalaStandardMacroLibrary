@@ -677,15 +677,16 @@ Type[A] match {
     }
 
   case None =&gt; Expr("")
-} // : MIO[Expr[String]]</code></pre></div></div></div></section></section>
-<section><section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2></section><section id="_regular_code" class="small-h2"><h2>Regular code</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+} // : MIO[Expr[String]]</code></pre></div></div></div></section><section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2><div class="slide-content"><div class="paragraph"><p>with <strong>Hearth</strong></p></div></div></section></section>
+<section><section id="_hearth_demo"><h2>Hearth demo</h2><div class="slide-content"><table class="tableblock frame-all grid-all small" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><div><div class="paragraph"><p>Code at:</p></div>
+<div class="imageblock"><img src="img/qr-code-github.png" alt="Hearth GitHub repository"></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li><p><code>Show[A]</code> demo at <code>hearth-tests/src/</code></p></li><li><p><code>main/scala/demo/Show.scala</code></p></li><li><p><code>main/scala/demo/ShowMacrosImpl.scala</code></p></li><li><p><code>main/scala-2/demo/ShowCompanionCompat.scala</code></p></li><li><p><code>main/scala-3/demo/ShowCompanionCompat.scala</code></p></li><li><p><code>test/scala-3/demo/ShowSpec.scala</code></p></li></ul></div></div></td></tr></table></div></section><section id="_regular_code" class="small-h2"><h2>Regular code</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
 trait Show[A] extends Show[A] {
 
   def show(value: A): String
 }
 
-object Show extends ShowCompanionCompat // Will provide .derived[A]</code></pre></div></div></div></section><section id="_cross_compilable_macro" class="small-h2"><h2>Cross-compilable macro</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+object Show extends ShowCompanionCompat // Will provide .derived[A]</code></pre></div></div></div></section><section id="_cross_compilable_macro" class="small-h2"><h2>Cross-compilable macro</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
 import hearth.*
 import fp.effect.*, fp.instances.*, fp.syntax.*
@@ -704,7 +705,7 @@ private[demo] trait ShowMacrosImpl { this: MacroCommons =&gt;
     value: Expr[A]
   ): Expr[String] = ...
   // ...
-}</code></pre></div></div></div></section><section id="_adapters" class="small-h2"><h2>Adapters</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+}</code></pre></div></div></div></section><section id="_adapters_necessary_for_now" class="small-h2"><h2>Adapters (necessary for now)</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
@@ -720,7 +721,7 @@ private[demo] class ShowMacros(val c: blackbox.Context)
 
   def deriveTypeClassImpl[A: c.WeakTypeTag]: c.Expr[Show[A]] = deriveTypeClass[A]
 }</code></pre></div></div>
-<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
 import scala.quoted.*
 
@@ -794,7 +795,17 @@ private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
 
 private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
 
-private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...</code></pre></div></div></div></section><section><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/** Enables logging if we either:
+private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...</code></pre></div></div></div></section></section>
+<section><section id="_but_what_about_logging"><h2>But what about logging?</h2></section><section><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// inside Show companion
+sealed trait LogDerivation
+object LogDerivation {
+  private object Instance extends LogDerivation
+  def apply(): LogDerivation = Instance
+}</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// Put outside of [[Show]] companion to prevent the implicit
+// from being summoned automatically!
+implicit val logDerivation: Show.LogDerivation = Show.LogDerivation()</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/** Enables logging if we either:
   *   - import [[demo.debug.logDerivation]] in the scope
   *   - have set scalac option `-Xmacro-settings:show.logDerivation=true`
   */
@@ -814,9 +825,14 @@ private def shouldWeLogDerivation: Boolean = {
 .expandFinalResultOrFail(
    s"Show[${Type.prettyPrint[A]}]"
    renderInfoLogs = shouldWeLogDerivation) { // &lt;- enable conditional logging
-// ...</code></pre></div></div>
-<div class="paragraph"><p>TODO: screeny</p></div></div></section></section>
-<section id="_summary"><h2>Summary</h2></section></div></div><script src="./reveal.js/dist/reveal.js"></script><script>Array.prototype.slice.call(document.querySelectorAll('.slides section')).forEach(function(slide) {
+// ...</code></pre></div></div></div></section><section><div class="slide-content"><div class="imageblock"><img src="img/logging-terminal.png" alt="Log in terminal"></div></div></section><section><div class="slide-content"><div class="imageblock"><img src="img/logging-vscode.png" alt="Log in VS Code"></div></div></section></section>
+<section id="_summary"><h2>Summary</h2><div class="slide-content"><aside class="notes"><div class="paragraph"><p>Hearth is currently a Proof-of-Concept.</p></div>
+<div class="paragraph"><p>There is much to do there, and I don&#8217;t consider it yet ready for a release.</p></div>
+<div class="paragraph"><p>But I hope, that it proved to you that macros can be sane.</p></div>
+<div class="paragraph"><p>That we can for most common use cases we can provide some sane API.</p></div>
+<div class="paragraph"><p>That the result could be easy to understand and debug.</p></div>
+<div class="paragraph"><p>That it is in our reach to replace the alternatives with something that compiles faster, <strong>and</strong> runs faster.</p></div>
+<div class="paragraph"><p>It doesn&#8217;t have to be Hearth, it might be some other library, but I hope that I inspired you to try.</p></div></aside></div></section></div></div><script src="./reveal.js/dist/reveal.js"></script><script>Array.prototype.slice.call(document.querySelectorAll('.slides section')).forEach(function(slide) {
   if (slide.getAttribute('data-background-color')) return;
   // user needs to explicitly say he wants CSS color to override otherwise we might break custom css or theme (#226)
   if (!(slide.classList.contains('canvas') || slide.classList.contains('background'))) return;

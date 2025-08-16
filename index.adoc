@@ -692,7 +692,27 @@ Enum.parse[A] match {
 } // : MIO[Expr[String]]
 --
 
-== Actually, it's already possible
+=== Actually, it's already possible
+
+with **Hearth**
+
+== Hearth demo
+
+[.small]
+[cols="1,1"]
+|===
+a|
+Code at:
+
+image::img/qr-code-github.png[Hearth GitHub repository]
+a|
+ * `Show[A]` demo at `hearth-tests/src/`
+ * `main/scala/demo/Show.scala`
+ * `main/scala/demo/ShowMacrosImpl.scala`
+ * `main/scala-2/demo/ShowCompanionCompat.scala`
+ * `main/scala-3/demo/ShowCompanionCompat.scala`
+ * `test/scala-3/demo/ShowSpec.scala`
+|===
 
 [.small-h2]
 === Regular code
@@ -700,7 +720,7 @@ Enum.parse[A] match {
 [.small]
 [source, scala]
 --
-package demo
+package hearth.demo
 
 trait Show[A] extends Show[A] {
 
@@ -716,7 +736,7 @@ object Show extends ShowCompanionCompat // Will provide .derived[A]
 [.small]
 [source, scala]
 --
-package demo
+package hearth.demo
 
 import hearth.*
 import fp.effect.*, fp.instances.*, fp.syntax.*
@@ -739,12 +759,12 @@ private[demo] trait ShowMacrosImpl { this: MacroCommons =>
 --
 
 [.small-h2]
-=== Adapters
+=== Adapters (necessary for now)
 
 [.small]
 [source, scala]
 --
-package demo
+package hearth.demo
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
@@ -765,7 +785,7 @@ private[demo] class ShowMacros(val c: blackbox.Context)
 [.small]
 [source, scala]
 --
-package demo
+package hearth.demo
 
 import scala.quoted.*
 
@@ -873,7 +893,28 @@ private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
 private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...
 --
 
+== But what about logging?
+
 === !
+
+[.small]
+[source, scala]
+--
+// inside Show companion
+sealed trait LogDerivation
+object LogDerivation {
+  private object Instance extends LogDerivation
+  def apply(): LogDerivation = Instance
+}
+--
+
+[.small]
+[source, scala]
+--
+// Put outside of [[Show]] companion to prevent the implicit
+// from being summoned automatically!
+implicit val logDerivation: Show.LogDerivation = Show.LogDerivation()
+--
 
 [.small]
 [source, scala]
@@ -906,6 +947,29 @@ private def shouldWeLogDerivation: Boolean = {
 // ...
 --
 
-TODO: screeny
+=== !
+
+image::img/logging-terminal.png[Log in terminal]
+
+=== !
+
+image::img/logging-vscode.png[Log in VS Code]
 
 == Summary
+
+[NOTE.speaker]
+--
+Hearth is currently a Proof-of-Concept.
+
+There is much to do there, and I don't consider it yet ready for a release.
+
+But I hope, that it proved to you that macros can be sane.
+
+That we can for most common use cases we can provide some sane API.
+
+That the result could be easy to understand and debug.
+
+That it is in our reach to replace the alternatives with something that compiles faster, **and** runs faster.
+
+It doesn't have to be Hearth, it might be some other library, but I hope that I inspired you to try.
+--
