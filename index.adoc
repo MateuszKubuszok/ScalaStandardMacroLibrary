@@ -113,15 +113,32 @@ And why especially the first 3 dominated the Scala ecosystem.
 
 === !
 
-(slajd na przykłady z errorami, benchmarkami kompilacji i runtime)
+[cols="1,1"]
+|===
+a|
+[%step]
+image::img/show-compilation-times.png[Compilation time]
+a|
+[%step]
+image::img/show-runtime-results.png[Runtime performance]
+a|
+[%step]
+[.small]
+[source]
+--
+implicit not found
 
-TODO
+ // vs
 
-=== !
-
-(slajd na przykład z logami z makra)
-
-TODO
+Failed to derive showing for value:
+  example.ShowSanely.User:
+No build-in support nor implicit
+for type scala.Nothing
+--
+a|
+[%step]
+image::img/show-debugging.png[Debugging experience]
+|===
 
 === In other words
 
