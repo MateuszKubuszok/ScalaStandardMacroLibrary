@@ -3,12 +3,12 @@
 :revealjs_theme: serif
 :revealjs_help: true
 
-
-= Can we have the Standard Library for Macros?
+[.small]
+= Can we have the{nbsp}Standard Library for{nbsp}Macros?
 
 ---
 
-Mateusz Kubuszok
+**Mateusz Kubuszok**
 
 [NOTE.speaker]
 --
@@ -19,7 +19,7 @@ Before answering the question in the title, we need to explain a few more things
 
 [NOTE.speaker]
 --
-First of all, what is a macro?
+First of all, what is a{nbsp}macro?
 --
 
 === !
@@ -38,6 +38,7 @@ First of all, what is a macro?
 
 === !
 
+[.small]
 [source, scala]
 --
 // Scala 2
@@ -56,6 +57,7 @@ def macroMethodImpl[A: c.WeakTypeTag](
 }
 --
 
+[.small]
 [source, scala]
 --
 // Scala 3
@@ -82,13 +84,15 @@ This is what I would mean, when I am talking about macros.
 [NOTE.speaker]
 --
 Perhaps we don't, and this whole presentation is pointless.
+
+What alternatives we have?
 --
 
 === Alternatives
 
 [%step]
  * Shapeless (Scala 2)
- * `inline` , Mirrors & `scala.compiletime` (Scala 3)
+ * `inline` , Mirrors & `scala.compiletime` (Scala{nbsp}3)
  * Magnolia (Scala 2 & 3)
  * runtime reflection
  
@@ -119,20 +123,22 @@ And why especially the first 3 dominated the Scala ecosystem.
 
 === Shapeless/Mirrors/etc
 
-You:
-
+[cols="1,1"]
+|===
+| You
+| Your users
+a|
 [%step]
  * easy start
  * rapid development
  * everything feels lean
  * everything feels prinicipled and correct
-
-Your users:
-
+a|
 [%step]
  * pay with longer compilation times
  * pay with less performant runtime
  * pay with more time spend if the code doesn't work
+|===
 
 [NOTE.speaker]
 --
@@ -146,25 +152,28 @@ When I look at this, and think of all the popular libraries based on that, I fee
 
 === Macros
 
-You:
-
+[.small]
+[cols="1,1"]
+|===
+| You
+| Your users
+a|
 [%step]
  * longer setup
  * no batteries included
  * development feel clunky
  * everything feels like a hack
-
-Your users:
-
+a|
 [%step]
  * _may_ get better compilation times (than alternatives)
  * _may_ get more performant runtime
  * _may_ get better errors messages
  * *or* may get an undebugabble mess that cannot be understood even by the author
+|===
 
 [NOTE.speaker]
 --
-(Before may and or) - and our users deserve it!
+(Between *may* and *or*) - and our users deserve it!
 
 So this on the other hands is like a hazard game.
 
@@ -180,36 +189,358 @@ But with no guarantee of success.
 It may sound unfounded, especially since Scala 3 macros are supposedly principled, so let's take a look at some examples.
 --
 
-== Some examples
+== Macros API
 
-TODO: klejenie drzewa na pałę
-TODO: Scala 3 dla odmiany principled
+**Opportunities for improvement**
 
-TODO: przykłady pattern matching typów w Scali 2
-TODO: Scala 3 dla odminany ogarnia
+=== Quoting and Splicing
 
-TODO: knownDirectSubclasses + generyki
-TODO: Scala 3 też posysa
+[cols="1,1"]
+|===
+| Scala 2 (Quasiquotes)
+| Scala 3 (Quotes)
+a|
+[source, scala]
+--
+// using Quotes
+val expr1 =
+  c.Expr[Int](q"21")
+val expr2 =
+  c.Expr[Int](q"37")
 
-TODO: wołanie arbitralnego ctora w Scali 3
-TODO: w Scali 2 za to quasiquotes
+val expr3 = c.Expr[Int](
+  q"""
+  ${ expr1 } + ${ expr2 }
+  """
+)
+--
+a|
+[source, scala]
+--
+// using Quotes
+val expr1 = Expr(21)
+val expr2 = Expr(37)
 
-TODO: pattern matching w Scali 3
-TODO: Scala 2 dla odmiany ogarnia
+val expr3 = '{
+  ${ expr1 } + ${ expr2 }
+}
+--
+|===
 
-TODO: no cats/zio/etc in macros so ergonomy is not great
+[NOTE.speaker]
+--
+On Scala 2, if we want to use types, we are very verbose.
 
-TODO: println debugging
+Types are not inferred, and we have to use `c.Type` and `c.Expr` to get them.
+
+Quasiquotes are basically compile-time-checked string interpolation,
+so even though they are powerful and usually safe,
+we have no syntax highlighting, nor intellisense when writing them.
+
+On Scala 3, we have some actual quotes, which works bettern with IDE.
+
+So, this looks like an issue only for Scala 2.
+--
+
+=== Matching Types
+
+[.small]
+[cols="1,1"]
+|===
+| Scala 2 (Quasiquotes)
+| Scala 3 (Quotes)
+a|
+[source, scala]
+--
+def whenOptionOf[A:c.WeakTypeTag] =...
+
+weakTypeOf[A]
+ .dealias
+ .widen
+ .baseType(
+  c.mirror.staticClass("scala.Option")
+ ) match {
+  case TypeRef(_, _, List(t)) =>
+    whenOptionOf(
+      c.WeakTypeTag(t.dealias.widen)
+    )
+  case _ => ...
+}
+--
+a|
+[source, scala]
+--
+def whenOptionOf[A: Type] = ...
+
+Type.of[A] match {
+  case '[Option[t]] =>
+    whenOptionOf[t]
+  case _ => ...
+}
+--
+|===
+
+[NOTE.speaker]
+--
+We want to pattern match on types. Is the type `A` an example of an `Option`?
+We also want to handle cases like `None`.
+
+The Scala 2 snippet barely fit in the table.
+
+Scala 3 is quotes easy to read.
+--
+
+=== Instantiating an{nbsp}Arbitrary Type
+
+[cols="1,1"]
+|===
+| Scala 2 (Quasiquotes)
+| Scala 3 (Quotes)
+a|
+[source, scala]
+--
+val args:List[List[c.Tree]]=
+  ...
+
+c.Expr[A](
+  q"""
+  new ${weakTypeOf[A]}(
+    ...${args}
+  )
+  """
+)
+--
+a|
+[source, scala]
+--
+val ctor = TypeRepr.of[A]
+  .typeSymbol
+  .primaryConstructor
+
+val args: List[List[Tree]] =
+  ...
+
+New(TypeTree.of[A])
+  .select(ctor)
+  .appliedToArgss(args)
+--
+|===
+
+[NOTE.speaker]
+--
+Scala 2 is not perfect, we're gluing untyped `Tree`s, but at least it's consistent.
+
+Scala 3, allows quoting and splicing, but only for whole expressions. Pieces that would build an expression have to be combined manually.
+--
+
+=== Constructing a Pattern Match
+
+[.small]
+[cols="1,1"]
+|===
+| Scala 2 (Quasiquotes)
+| Scala 3 (Quotes)
+a|
+[source, scala]
+--
+def handleCase[
+  A: c.WeakTypeTag
+](name: c.Expr[A]) = ...
+--
+
+[source, scala]
+--
+/* for each case: */
+val name = c.internal
+  .reificationSupport
+  .freshTermName("a")
+cq"""
+$name: ${weakTypeOf[A]} =>
+  ${handleCase(c.Expr[A](q"$name"))}
+"""
+--
+
+[source, scala]
+--
+/* then create the match: */
+c.Expr[Result](
+  q"""
+  $expr match { ...${cases} }
+  """
+)
+--
+a|
+[source, scala]
+--
+def handleCase[
+  A: Tag
+](name: Expr[A]) = ...
+--
+
+[source, scala]
+--
+/* for each case: */
+val name = Symbol.newBind(
+  Symbol.spliceOwner,
+  Symbol.freshName("a"),
+  Flags.Empty,
+  TypeRepr.of[A]
+)
+CaseDef(
+  Bind(
+    name,
+    Typed(Wildcard(),TypeTree.of[A])),
+  None,
+  handleCase(Ref(name).asExprOf[A]))
+--
+
+[source, scala]
+--
+Match(expr.asTerm, cases)
+  .asExprOf[Result]
+--
+|===
+
+[NOTE.speaker]
+--
+Scala 2, again, not perfect, but consistent. We can actually read the code and understand what's going on.
+
+Scala 3, we can get easily lost with the details.
+
+And, these are not even bullet-proof:
+for some cases such match would work, but for some it would not,
+so we would have to write multiple versions and check which applies.
+--
+
+=== Sealed Trait's Children
+
+[.small]
+[cols="1,1"]
+|===
+| Scala 2 (Quasiquotes)
+| Scala 3 (Quotes)
+a|
+[source, scala]
+--
+TODO
+--
+a|
+[source, scala]
+--
+TODO
+--
+|===
+
+[NOTE.speaker]
+--
+
+--
+
+=== !
+
+[.small]
+[cols="1,1"]
+|===
+| Scala 2 (Quasiquotes)
+| Scala 3 (Quotes)
+a|
+[%step]
+ * glueing strings instead of typed code
+ * but at least these string resemble the real code
+ * and compiler checks them
+a|
+[%step]
+ * gluing expressions as every other real code
+ * but it's not an expression, we are gluing together untyped trees
+|===
+
+[NOTE.speaker]
+--
+It seems that the API is lacking.
+
+What other issues we might have?
+--
+
+== No `println` debugging
+
+[.small]
+[cols="1,1"]
+|===
+| Macro reporting
+a| `println`
+a|
+[source, scala]
+--
+c.echo("msg") // Scala 2
+report.info("msg") // Scala 3
+--
+a|
+[source, scala]
+--
+println("msg")
+--
+a|
+[%step]
+ * works in the terminal
+ * works in the IDE
+ * works in Scastie
+ * logs only the first message from the macro
+a|
+[%step]
+ * prints every time
+ * works only in the terminal
+ * unless we are using some compilation server
+|===
+
+[NOTE.speaker]
+--
+Macros on both Scala 2 and 3 have reporting mechanisms, which allow showing some hints in the terminal, or in the IDE, or even Scastie.
+
+But if we use `println`, it works only in the terminal. And only if we are not using some compilation server.
+
+Problem with the macro reporting API, is that only the first message is shown.
+
+So, we would have to aggregate the messages somehow, before calling the API only once.
+--
+
+== Avoiding runtime dependencies in macros
+
+[%step]
+ * no Cats
+ * no ZIO
+ * nor any other library, that could be used in runtime
+
+[NOTE.speaker]
+--
+It would be silly if some of our code stopped compiling, because there was a major release of a large library, that we used in some other part of our code.
+Or the opposite, if the author of macros forced us to update our dependancy to a new major version, just to fix an unrelated bug.
+
+Unless macro creates a value type that comes from some library used in runtime, it should not have dependency on that library.
+
+But it we had a library that is not intended for runtime, then there is no conflict.
+--
 
 == Let us imagine a better API
 
+=== Macro IO
+
 TODO: first off, MIO
+
+=== Logging
+
+=== Let's assume that it can be a thing
 
 TODO: for now let's use that pseudocode syntax for quotes
 
+=== !
+
 TODO: extracting types and matching them
 
+=== ! 
+
 TODO: calling ctors and methods
+
+=== !
 
 TODO: pattern matching on subtypes
 
@@ -218,8 +549,3 @@ TODO: pattern matching on subtypes
 demo example
 
 == Summary
-
-
-
-
-
