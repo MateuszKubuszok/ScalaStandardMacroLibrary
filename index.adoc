@@ -524,28 +524,388 @@ But it we had a library that is not intended for runtime, then there is no confl
 
 === Macro IO
 
-TODO: first off, MIO
+[source, scala]
+--
+val a = MIO {
+  21
+}
+val b = MIO {
+  37
+}
+
+a.map2(b)(_ + _) // applicative syntax
+--
+
+[source, scala]
+--
+for {
+  i <- MIO(1)
+  j <- MIO(2)
+} yield i + j // monadic syntax
+--
+
+[source, scala]
+--
+List("1", "2", "3", "a", "b").parTraverse { a =>
+  MIO(a.toInt)
+} // .par* aggregates errors
+--
+
+[NOTE.speaker]
+--
+First of all, let's image that we can use `IO`-like data type.
+
+It's lazy, non-memoizable, stack-safe, and has all the nice utilities that we expect from `IO`.
+
+It is, of course, completely optional. But if you're into it, then logging would also easy.
+--
 
 === Logging
 
+[source, scala]
+--
+Log.namedScope("All logs here will share the same span") {
+  Log.info("Some operation starting") >> // standalone log
+
+    MIO("some operation")
+      .log.info("Some operation ended") >> // log after IO
+
+    Log.namedScope("Spans can be nested") {
+      Log.info("Nested log") // we can nest as much as we want
+    }
+}
+--
+
+[source]
+--
+All logs here will share the same span:
+├ [Info]  Some operation starting
+├ [Info]  Some operation ended
+└ Spans can be nested:
+  └ [Info]  Nested log
+--
+
+[NOTE.speaker]
+--
+We could imagine that we can treat logging as a MIO effect.
+
+And since we might decide to use spans, to give it some structure
+--
+
 === Let's assume that it can be a thing
 
-TODO: for now let's use that pseudocode syntax for quotes
+[source, scala]
+--
+// Yet another utility, because .map/.flatMap
+// cannot handle this:
+MIO.async { await =>
 
-=== !
+  Expr.quote { // <- instead of '{}/ q"..."
+    new Show[A] {
 
-TODO: extracting types and matching them
+     def show(a: A): String = Expr.splice {// <- instead of ${}
+        await {
+          deriveShowBody(Expr.quote{ a })// : MIO[Expr[String]]
+        }
+      }
+    }
+  }
+}
+--
 
-=== ! 
+[NOTE.speaker]
+--
+Syntaxes for Quotes and Quasiquotes seems like something that cannot be reconciled.
+But let us imagine that they can.
 
-TODO: calling ctors and methods
+Let us also imagine, that we have such a "direct style" available to us. Because
+we can easily come up with situations, where it would be more convenient than monadic API.
+Or where monadic API would be simply impossible.
+--
 
-=== !
+=== And this as well:
 
-TODO: pattern matching on subtypes
+[source, scala]
+--
+val OptionType = Type.Ctor1.of[Option]
+val EitherType = Type.Ctor2.of[Either]
+
+Type[A] match {
+  case OptionType(a) =>
+    ... // a is A in Option[A]
+  case EitherType(l, r) =>
+    ... // l is L and r is R in Either[L, R]
+  case _ =>
+    ... // A is not an Option or Either
+}
+--
+
+=== Imagine you created instances like this:
+
+[.small]
+[source, scala]
+--
+CaseClass.parse[A] match {
+  case Some(caseClass) =>
+   // A(summon[Arg1], summon[Arg2], ...)
+   caseClass.construct { parameter =>
+      import parameter.tpe.Underlying as Param
+
+      Expr.summonImplicit[Param] match {
+        case Some(expr) => MIO.pure(expr)
+
+        case None => MIO.fail(
+          new Exception(s"No implicit for ${Type.prettyPrint[Param]}")
+        )
+      }
+   }
+
+  case None => MIO.fail(
+    new Exception(s"Not a case class: ${Type.prettyPrint[A]}")
+  )
+} // : MIO[Expr[A]]
+--
+
+=== And pattern-matched like this:
+
+[.small]
+[source, scala]
+--
+Enum.parse[A] match {
+  case Some(enumm) =>
+
+    // expr match {
+    //   case b: B => "B" + " : " + b.toString
+    //   ...
+    // }
+    enumm.matchOn(expr) { matchedSubtype =>
+      import matchedSubtype.{Underlying as B, value as b}
+      val bName = Expr(Type.simpleName[B])
+      MIO {
+        Expr.quote {
+          Expr.splice { b } + " : " + Expr.splice { bName }
+        }
+      }
+    }
+
+  case None => Expr("")
+} // : MIO[Expr[String]]
+--
 
 == Actually, it's already possible
 
-demo example
+[.small-h2]
+=== Regular code
+
+[.small]
+[source, scala]
+--
+package demo
+
+trait Show[A] extends Show[A] {
+
+  def show(value: A): String
+}
+
+object Show extends ShowCompanionCompat // Will provide .derived[A]
+--
+
+[.small-h2]
+=== Cross-compilable macro
+
+[.small]
+[source, scala]
+--
+package demo
+
+import hearth.*
+import fp.effect.*, fp.instances.*, fp.syntax.*
+
+private[demo] trait ShowMacrosImpl { this: MacroCommons =>
+
+  def deriveTypeClass[A: Type]: Expr[Show[A]] = Expr.quote {
+    new Show[A] {
+      def show(value: A): String = Expr.splice {
+        deriveOrFail[A](Expr.quote(value))
+      }
+    }
+  }
+
+  private def deriveOrFail[A: Type](
+    value: Expr[A]
+  ): Expr[String] = ...
+  // ...
+}
+--
+
+[.small-h2]
+=== Adapters
+
+[.small]
+[source, scala]
+--
+package demo
+
+import scala.language.experimental.macros
+import scala.reflect.macros.blackbox
+
+private[demo] trait ShowCompanionCompat { this: Show.type =>
+
+  def derived[A]: Show[A] = macro ShowMacros.deriveTypeClassImpl[A]
+}
+
+private[demo] class ShowMacros(val c: blackbox.Context)
+    extends hearth.MacroCommonsScala2
+    with ShowMacrosImpl {
+
+  def deriveTypeClassImpl[A: c.WeakTypeTag]: c.Expr[Show[A]] = deriveTypeClass[A]
+}
+--
+
+[.small]
+[source, scala]
+--
+package demo
+
+import scala.quoted.*
+
+private[demo] trait ShowCompanionCompat { this: Show.type =>
+
+  inline derived[A]: Show[A] = ${ ShowMacros.deriveTypeClass[A] }
+}
+
+private[demo] class ShowMacros(q: Quotes)
+    extends hearth.MacroCommonsScala3(using q), ShowMacrosImpl
+
+private[demo] object ShowMacros {
+
+  def deriveTypeClass[A: Type](using q: Quotes): Expr[Show[A]] =
+    new ShowMacros(q).deriveTypeClass[A]
+}
+--
+
+=== !
+
+[.small]
+[source, scala]
+--
+sealed private[demo] trait DerivationError
+    extends scala.util.control.NoStackTrace
+    with Product
+    with Serializable
+private[demo] object DerivationError {
+  final case class UnsupportedType(typeName: String) extends DerivationError
+  ... // other cases
+}
+--
+
+[.small]
+[source, scala]
+--
+private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
+  Log.namedScope(s"Derivation for Show[${Type.prettyPrint[A]}]") {
+    attemptAllRules[A](value) // <- this is the core of the logic
+  }
+  .expandFinalResultOrFail(s"Show[${Type.prettyPrint[A]}]") {
+      (errorLogs, errors) =>
+    val errorsStr = errors.toVector.map {
+      case DerivationError.UnsupportedType(typeName) =>
+        s"Derivation of $typeName is not supported"
+      ... // other cases
+      case e =>
+        s"Unexpected error: ${e.getMessage}:\n${e.getStackTrace.mkString("\n")}"
+    }.mkString("\n")
+
+    s"""Failed to derive Show[${Type.prettyPrint[A]}]:
+       |$errorsStr
+       |Error logs:
+       |$errorLogs
+       |""".stripMargin
+  }
+--
+
+=== !
+
+[.small]
+[source, scala]
+--
+/** Idea:
+  *   - successful Some -> rule applies, attempt succeeded
+  *   - successful None -> rule doesn't apply, we should try the next one
+  *   - failure -> rule applies but it failed, we should fail the whole derivation
+  * If none of the rules matched, then we fail derivation as well.
+  */
+private type Attempt[A] = MIO[Option[Expr[A]]]
+--
+
+[.small]
+[source, scala]
+--
+private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
+  MIO.async { await =>
+    await {
+      attemptUsingImplicit[A](value)
+    } orElse await {
+      attemptAsBuiltIn[A](value)
+    } orElse await {
+      attemptAsIterable[A](value)
+    } orElse await {
+      attemptAsCaseClass[A](value)
+    } orElse await {
+      attemptAsEnum[A](value)
+    } getOrElse await {
+      MIO.fail(DerivationError.UnsupportedType(Type.prettyPrint[A]))
+    }
+  }
+--
+
+[.small]
+[source, scala]
+--
+private def attemptUsingImplicit[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsBuiltIn[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...
+--
+
+=== !
+
+[.small]
+[source, scala]
+--
+/** Enables logging if we either:
+  *   - import [[demo.debug.logDerivation]] in the scope
+  *   - have set scalac option `-Xmacro-settings:show.logDerivation=true`
+  */
+private def shouldWeLogDerivation: Boolean = {
+  implicit val LogDerivation: Type[Show.LogDerivation] = Types.LogDerivation
+  def logDerivationImported = Expr.summonImplicit[Show.LogDerivation].isDefined
+
+  def logDerivationSetGlobally = (for {
+    data <- Environment.typedSettings.toOption
+    show <- data.get("show")
+    shouldLog <- show.get("logDerivation").flatMap(_.asBoolean)
+  } yield shouldLog).getOrElse(false)
+
+  logDerivationImported || logDerivationSetGlobally
+}
+--
+
+[.small]
+[source, scala]
+--
+// ...
+.expandFinalResultOrFail(
+   s"Show[${Type.prettyPrint[A]}]"
+   renderInfoLogs = shouldWeLogDerivation) { // <- enable conditional logging
+// ...
+--
+
+TODO: screeny
 
 == Summary

@@ -579,8 +579,243 @@ report.info("msg") // Scala 3</code></pre></div></div></div></td><td class="tabl
 Or the opposite, if the author of macros forced us to update our dependancy to a new major version, just to fix an unrelated bug.</p></div>
 <div class="paragraph"><p>Unless macro creates a value type that comes from some library used in runtime, it should not have dependency on that library.</p></div>
 <div class="paragraph"><p>But it we had a library that is not intended for runtime, then there is no conflict.</p></div></aside></div></section>
-<section><section id="_let_us_imagine_a_better_api"><h2>Let us imagine a better API</h2></section><section id="_macro_io"><h2>Macro IO</h2><div class="slide-content"><div class="paragraph"><p>TODO: first off, MIO</p></div></div></section><section id="_logging"><h2>Logging</h2></section><section id="_lets_assume_that_it_can_be_a_thing"><h2>Let&#8217;s assume that it can be a thing</h2><div class="slide-content"><div class="paragraph"><p>TODO: for now let&#8217;s use that pseudocode syntax for quotes</p></div></div></section><section><div class="slide-content"><div class="paragraph"><p>TODO: extracting types and matching them</p></div></div></section><section><div class="slide-content"><div class="paragraph"><p>TODO: calling ctors and methods</p></div></div></section><section><div class="slide-content"><div class="paragraph"><p>TODO: pattern matching on subtypes</p></div></div></section></section>
-<section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2><div class="slide-content"><div class="paragraph"><p>demo example</p></div></div></section>
+<section><section id="_let_us_imagine_a_better_api"><h2>Let us imagine a better API</h2></section><section id="_macro_io"><h2>Macro IO</h2><div class="slide-content"><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val a = MIO {
+  21
+}
+val b = MIO {
+  37
+}
+
+a.map2(b)(_ + _) // applicative syntax</code></pre></div></div>
+<div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">for {
+  i &lt;- MIO(1)
+  j &lt;- MIO(2)
+} yield i + j // monadic syntax</code></pre></div></div>
+<div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">List("1", "2", "3", "a", "b").parTraverse { a =&gt;
+  MIO(a.toInt)
+} // .par* aggregates errors</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>First of all, let&#8217;s image that we can use <code>IO</code>-like data type.</p></div>
+<div class="paragraph"><p>It&#8217;s lazy, non-memoizable, stack-safe, and has all the nice utilities that we expect from <code>IO</code>.</p></div>
+<div class="paragraph"><p>It is, of course, completely optional. But if you&#8217;re into it, then logging would also easy.</p></div></aside></div></section><section id="_logging"><h2>Logging</h2><div class="slide-content"><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">Log.namedScope("All logs here will share the same span") {
+  Log.info("Some operation starting") &gt;&gt; // standalone log
+
+    MIO("some operation")
+      .log.info("Some operation ended") &gt;&gt; // log after IO
+
+    Log.namedScope("Spans can be nested") {
+      Log.info("Nested log") // we can nest as much as we want
+    }
+}</code></pre></div></div>
+<div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-none hljs" data-noescape="true">All logs here will share the same span:
+├ [Info]  Some operation starting
+├ [Info]  Some operation ended
+└ Spans can be nested:
+  └ [Info]  Nested log</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>We could imagine that we can treat logging as a MIO effect.</p></div>
+<div class="paragraph"><p>And since we might decide to use spans, to give it some structure</p></div></aside></div></section><section id="_lets_assume_that_it_can_be_a_thing"><h2>Let&#8217;s assume that it can be a thing</h2><div class="slide-content"><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// Yet another utility, because .map/.flatMap
+// cannot handle this:
+MIO.async { await =&gt;
+
+  Expr.quote { // &lt;- instead of '{}/ q"..."
+    new Show[A] {
+
+     def show(a: A): String = Expr.splice {// &lt;- instead of ${}
+        await {
+          deriveShowBody(Expr.quote{ a })// : MIO[Expr[String]]
+        }
+      }
+    }
+  }
+}</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>Syntaxes for Quotes and Quasiquotes seems like something that cannot be reconciled.
+But let us imagine that they can.</p></div>
+<div class="paragraph"><p>Let us also imagine, that we have such a "direct style" available to us. Because
+we can easily come up with situations, where it would be more convenient than monadic API.
+Or where monadic API would be simply impossible.</p></div></aside></div></section><section id="_and_this_as_well"><h2>And this as well:</h2><div class="slide-content"><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val OptionType = Type.Ctor1.of[Option]
+val EitherType = Type.Ctor2.of[Either]
+
+Type[A] match {
+  case OptionType(a) =&gt;
+    ... // a is A in Option[A]
+  case EitherType(l, r) =&gt;
+    ... // l is L and r is R in Either[L, R]
+  case _ =&gt;
+    ... // A is not an Option or Either
+}</code></pre></div></div></div></section><section id="_imagine_you_created_instances_like_this"><h2>Imagine you created instances like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">CaseClass.parse[A] match {
+  case Some(caseClass) =&gt;
+   // A(summon[Arg1], summon[Arg2], ...)
+   caseClass.construct { parameter =&gt;
+      import parameter.tpe.Underlying as Param
+
+      Expr.summonImplicit[Param] match {
+        case Some(expr) =&gt; MIO.pure(expr)
+
+        case None =&gt; MIO.fail(
+          new Exception(s"No implicit for ${Type.prettyPrint[Param]}")
+        )
+      }
+   }
+
+  case None =&gt; MIO.fail(
+    new Exception(s"Not a case class: ${Type.prettyPrint[A]}")
+  )
+} // : MIO[Expr[A]]</code></pre></div></div></div></section><section id="_and_pattern_matched_like_this"><h2>And pattern-matched like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">Enum.parse[A] match {
+  case Some(enumm) =&gt;
+
+    // expr match {
+    //   case b: B =&gt; "B" + " : " + b.toString
+    //   ...
+    // }
+    enumm.matchOn(expr) { matchedSubtype =&gt;
+      import matchedSubtype.{Underlying as B, value as b}
+      val bName = Expr(Type.simpleName[B])
+      MIO {
+        Expr.quote {
+          Expr.splice { b } + " : " + Expr.splice { bName }
+        }
+      }
+    }
+
+  case None =&gt; Expr("")
+} // : MIO[Expr[String]]</code></pre></div></div></div></section></section>
+<section><section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2></section><section id="_regular_code" class="small-h2"><h2>Regular code</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+
+trait Show[A] extends Show[A] {
+
+  def show(value: A): String
+}
+
+object Show extends ShowCompanionCompat // Will provide .derived[A]</code></pre></div></div></div></section><section id="_cross_compilable_macro" class="small-h2"><h2>Cross-compilable macro</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+
+import hearth.*
+import fp.effect.*, fp.instances.*, fp.syntax.*
+
+private[demo] trait ShowMacrosImpl { this: MacroCommons =&gt;
+
+  def deriveTypeClass[A: Type]: Expr[Show[A]] = Expr.quote {
+    new Show[A] {
+      def show(value: A): String = Expr.splice {
+        deriveOrFail[A](Expr.quote(value))
+      }
+    }
+  }
+
+  private def deriveOrFail[A: Type](
+    value: Expr[A]
+  ): Expr[String] = ...
+  // ...
+}</code></pre></div></div></div></section><section id="_adapters" class="small-h2"><h2>Adapters</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+
+import scala.language.experimental.macros
+import scala.reflect.macros.blackbox
+
+private[demo] trait ShowCompanionCompat { this: Show.type =&gt;
+
+  def derived[A]: Show[A] = macro ShowMacros.deriveTypeClassImpl[A]
+}
+
+private[demo] class ShowMacros(val c: blackbox.Context)
+    extends hearth.MacroCommonsScala2
+    with ShowMacrosImpl {
+
+  def deriveTypeClassImpl[A: c.WeakTypeTag]: c.Expr[Show[A]] = deriveTypeClass[A]
+}</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package demo
+
+import scala.quoted.*
+
+private[demo] trait ShowCompanionCompat { this: Show.type =&gt;
+
+  inline derived[A]: Show[A] = ${ ShowMacros.deriveTypeClass[A] }
+}
+
+private[demo] class ShowMacros(q: Quotes)
+    extends hearth.MacroCommonsScala3(using q), ShowMacrosImpl
+
+private[demo] object ShowMacros {
+
+  def deriveTypeClass[A: Type](using q: Quotes): Expr[Show[A]] =
+    new ShowMacros(q).deriveTypeClass[A]
+}</code></pre></div></div></div></section><section><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">sealed private[demo] trait DerivationError
+    extends scala.util.control.NoStackTrace
+    with Product
+    with Serializable
+private[demo] object DerivationError {
+  final case class UnsupportedType(typeName: String) extends DerivationError
+  ... // other cases
+}</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
+  Log.namedScope(s"Derivation for Show[${Type.prettyPrint[A]}]") {
+    attemptAllRules[A](value) // &lt;- this is the core of the logic
+  }
+  .expandFinalResultOrFail(s"Show[${Type.prettyPrint[A]}]") {
+      (errorLogs, errors) =&gt;
+    val errorsStr = errors.toVector.map {
+      case DerivationError.UnsupportedType(typeName) =&gt;
+        s"Derivation of $typeName is not supported"
+      ... // other cases
+      case e =&gt;
+        s"Unexpected error: ${e.getMessage}:\n${e.getStackTrace.mkString("\n")}"
+    }.mkString("\n")
+
+    s"""Failed to derive Show[${Type.prettyPrint[A]}]:
+       |$errorsStr
+       |Error logs:
+       |$errorLogs
+       |""".stripMargin
+  }</code></pre></div></div></div></section><section><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/** Idea:
+  *   - successful Some -&gt; rule applies, attempt succeeded
+  *   - successful None -&gt; rule doesn't apply, we should try the next one
+  *   - failure -&gt; rule applies but it failed, we should fail the whole derivation
+  * If none of the rules matched, then we fail derivation as well.
+  */
+private type Attempt[A] = MIO[Option[Expr[A]]]</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
+  MIO.async { await =&gt;
+    await {
+      attemptUsingImplicit[A](value)
+    } orElse await {
+      attemptAsBuiltIn[A](value)
+    } orElse await {
+      attemptAsIterable[A](value)
+    } orElse await {
+      attemptAsCaseClass[A](value)
+    } orElse await {
+      attemptAsEnum[A](value)
+    } getOrElse await {
+      MIO.fail(DerivationError.UnsupportedType(Type.prettyPrint[A]))
+    }
+  }</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def attemptUsingImplicit[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsBuiltIn[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...</code></pre></div></div></div></section><section><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/** Enables logging if we either:
+  *   - import [[demo.debug.logDerivation]] in the scope
+  *   - have set scalac option `-Xmacro-settings:show.logDerivation=true`
+  */
+private def shouldWeLogDerivation: Boolean = {
+  implicit val LogDerivation: Type[Show.LogDerivation] = Types.LogDerivation
+  def logDerivationImported = Expr.summonImplicit[Show.LogDerivation].isDefined
+
+  def logDerivationSetGlobally = (for {
+    data &lt;- Environment.typedSettings.toOption
+    show &lt;- data.get("show")
+    shouldLog &lt;- show.get("logDerivation").flatMap(_.asBoolean)
+  } yield shouldLog).getOrElse(false)
+
+  logDerivationImported || logDerivationSetGlobally
+}</code></pre></div></div>
+<div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// ...
+.expandFinalResultOrFail(
+   s"Show[${Type.prettyPrint[A]}]"
+   renderInfoLogs = shouldWeLogDerivation) { // &lt;- enable conditional logging
+// ...</code></pre></div></div>
+<div class="paragraph"><p>TODO: screeny</p></div></div></section></section>
 <section id="_summary"><h2>Summary</h2></section></div></div><script src="./reveal.js/dist/reveal.js"></script><script>Array.prototype.slice.call(document.querySelectorAll('.slides section')).forEach(function(slide) {
   if (slide.getAttribute('data-background-color')) return;
   // user needs to explicitly say he wants CSS color to override otherwise we might break custom css or theme (#226)
