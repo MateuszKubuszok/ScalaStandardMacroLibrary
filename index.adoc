@@ -140,6 +140,20 @@ a|
 image::img/show-debugging.png[Debugging experience]
 |===
 
+[NOTE.speaker]
+--
+I've already made a whole presentation where I showed that:
+
+ * libraries based on Shapeless/Mirrors would often have longer compilation times
+   then those that use raw macros to achieve the same thing
+ * runtime performance can be easily optimized with macros, with other approaches
+   it might not be so easy
+ * macros make it relatively easy to provide useful errors, with implicits
+   an inline defs you have to be very creative to gain very little
+ * you can make macro debuggable - almost nobody does it currently, but it can be done
+   to reach the levels of helpfulness unavailable to implicits and raw inline defs
+--
+
 === In other words
 
 === Shapeless/Mirrors/etc
@@ -153,7 +167,7 @@ a|
  * easy start
  * rapid development
  * everything feels lean
- * everything feels prinicipled and correct
+ * everything feels principled and correct
 a|
 [%step]
  * pay with longer compilation times
@@ -214,6 +228,11 @@ It may sound unfounded, especially since Scala 3 macros are supposedly principle
 
 **Opportunities for improvement**
 
+[NOTE.speaker]
+--
+Our first example would be...
+--
+
 === Quoting and Splicing
 
 [%step]
@@ -253,7 +272,7 @@ val expr3 = '{
 --
 On Scala 2, if we want to use types, we are very verbose.
 
-Types are not inferred, and we have to use `c.Type` and `c.Expr` to get them.
+Types are not inferred, and we have to use `c.WeakTypeTag` and `c.Expr` to get them.
 
 Quasiquotes are basically compile-time-checked string interpolation,
 so even though they are powerful and usually safe,
@@ -398,7 +417,7 @@ a|
 [source, scala]
 --
 def handleCase[
-  A: Tag
+  A: Type
 ](name: Expr[A]) = ...
 --
 
@@ -509,8 +528,8 @@ if (sym.flags.is(Flags.Sealed)) {
 | Scala 3 (Quotes)
 a|
 [%step]
- * glueing strings instead of typed code
- * but at least these string resemble the real code
+ * gluing strings instead of typed code
+ * but at least these strings resemble the real code
  * and compiler checks them
 a|
 [%step]
@@ -704,6 +723,12 @@ Type[A] match {
 }
 --
 
+[NOTE.speaker]
+--
+Let us imagine this is also possible - we create a utility for applying and unapplying
+type parameters from the type, and it just works on both versions of Scala.
+--
+
 === Imagine you created instances like this:
 
 [.small]
@@ -730,6 +755,12 @@ CaseClass.parse[A] match {
 } // : MIO[Expr[A]]
 --
 
+[NOTE.speaker]
+--
+We can also imagine that we have a Magnolia-like API but in the macro,
+so creating a new instance, would be much easier, and more high-level.
+--
+
 === And pattern-matched like this:
 
 [.small]
@@ -754,6 +785,12 @@ Enum.parse[A] match {
 
   case None => Expr("")
 } // : MIO[Expr[String]]
+--
+
+[NOTE.speaker]
+--
+And similarly for enums, we can just get all of the subtypes with type parameters appliced
+that we could just patter-match.
 --
 
 === Actually, it's already possible
@@ -800,6 +837,16 @@ a|
  * `test/scala-3/demo/ShowSpec.scala`
 |===
 
+[NOTE.speaker]
+--
+The code would use the the construct that we just used
+and in a what that we just used, so I'll skip ahowing it again.
+
+Reading a whole complete program is easier in your IDE than on a slide.
+
+But I might highlight a few new things.
+--
+
 [.small-h2]
 === Regular code
 
@@ -814,6 +861,12 @@ trait Show[A] extends Show[A] {
 }
 
 object Show extends ShowCompanionCompat // Will provide .derived[A]
+--
+
+[NOTE.speaker]
+--
+This is just good old non-macro code. The derivation was moved to `ShowCompanionCompat`,
+I'll show in a moment why.
 --
 
 [.small-h2]
@@ -844,6 +897,17 @@ private[demo] trait ShowMacrosImpl { this: MacroCommons =>
 }
 --
 
+[NOTE.speaker]
+--
+This is our macro logic. We write it once, and use in 2 versions of Scala.
+
+All of the APIs are provided in `MacroCommons` mix-in.
+
+It's only required if we want to generate also for Scala 2,
+if we are only interested in Scala 3 macros but with better API,
+then you'll find a way of skipping creating a trait and mix-ing it in.
+--
+
 [.small-h2]
 === Adapters (necessary for now)
 
@@ -852,8 +916,7 @@ private[demo] trait ShowMacrosImpl { this: MacroCommons =>
 --
 package hearth.demo
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox
+import scala.language.experimental.macros, scala.reflect.macros.blackbox
 
 private[demo] trait ShowCompanionCompat { this: Show.type =>
 
@@ -863,7 +926,6 @@ private[demo] trait ShowCompanionCompat { this: Show.type =>
 private[demo] class ShowMacros(val c: blackbox.Context)
     extends hearth.MacroCommonsScala2
     with ShowMacrosImpl {
-
   def deriveTypeClassImpl[A: c.WeakTypeTag]: c.Expr[Show[A]] = deriveTypeClass[A]
 }
 --
@@ -884,10 +946,20 @@ private[demo] class ShowMacros(q: Quotes)
     extends hearth.MacroCommonsScala3(using q), ShowMacrosImpl
 
 private[demo] object ShowMacros {
-
   def deriveTypeClass[A: Type](using q: Quotes): Expr[Show[A]] =
     new ShowMacros(q).deriveTypeClass[A]
 }
+--
+
+[NOTE.speaker]
+--
+Since we decided to make our macro cross-complable to Scala 2 and Scala 3
+via a mix-in, we have to mix it into something.
+
+That's why we have to write an adapter.
+
+Currently it's a bit of a boulerplace, but in the future we can have some
+macro annotation, or a compiler plugin, to get rid of it.
 --
 
 === !
@@ -934,6 +1006,17 @@ private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
   }
 --
 
+[NOTE.speaker]
+--
+If we looked into the macro, we could also see that we made some utilities
+to express our logic easier - e.g. we wrote our own error types.
+
+And then we can just run the code that would return these as errors,
+maybe even log something - so we can use these 2 utilities to:
+ * name the scope in the nested logging
+ * convert errors (and error log messages) into a single error message
+--
+
 === !
 
 [%step]
@@ -949,6 +1032,20 @@ private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
 private type Attempt[A] = MIO[Option[Expr[A]]]
 --
 
+[%step]
+[.small]
+[source, scala]
+--
+private def attemptUsingImplicit[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsBuiltIn[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...
+--
 [%step]
 [.small]
 [source, scala]
@@ -969,21 +1066,6 @@ private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
       MIO.fail(DerivationError.UnsupportedType(Type.prettyPrint[A]))
     }
   }
---
-
-[%step]
-[.small]
-[source, scala]
---
-private def attemptUsingImplicit[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsBuiltIn[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...
 --
 
 == But what about logging?

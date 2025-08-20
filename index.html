@@ -457,7 +457,13 @@ def macroMethodImpl[A: Type](
 Failed to derive showing for value:
   example.ShowSanely.User:
 No build-in support nor implicit
-for type scala.Nothing</code></pre></div></div></div></td><td class="tableblock halign-left valign-top"><div><div class="imageblock fragment"><img src="img/show-debugging.png" alt="Debugging experience"></div></div></td></tr></table></div></section><section id="_in_other_words"><h2>In other words</h2></section><section id="_shapelessmirrorsetc"><h2>Shapeless/Mirrors/etc</h2><div class="slide-content"><table class="tableblock frame-all grid-all" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">You</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Your users</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>easy start</p></li><li class="fragment"><p>rapid development</p></li><li class="fragment"><p>everything feels lean</p></li><li class="fragment"><p>everything feels prinicipled and correct</p></li></ul></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>pay with longer compilation times</p></li><li class="fragment"><p>pay with less performant runtime</p></li><li class="fragment"><p>pay with more time spend if the code doesn&#8217;t work</p></li></ul></div></div></td></tr></table>
+for type scala.Nothing</code></pre></div></div></div></td><td class="tableblock halign-left valign-top"><div><div class="imageblock fragment"><img src="img/show-debugging.png" alt="Debugging experience"></div></div></td></tr></table>
+<aside class="notes"><div class="paragraph"><p>I&#8217;ve already made a whole presentation where I showed that:</p></div>
+<div class="ulist"><ul><li><p>libraries based on Shapeless/Mirrors would often have longer compilation times
+then those that use raw macros to achieve the same thing</p></li><li><p>runtime performance can be easily optimized with macros, with other approaches
+it might not be so easy</p></li><li><p>macros make it relatively easy to provide useful errors, with implicits
+an inline defs you have to be very creative to gain very little</p></li><li><p>you can make macro debuggable - almost nobody does it currently, but it can be done
+to reach the levels of helpfulness unavailable to implicits and raw inline defs</p></li></ul></div></aside></div></section><section id="_in_other_words"><h2>In other words</h2></section><section id="_shapelessmirrorsetc"><h2>Shapeless/Mirrors/etc</h2><div class="slide-content"><table class="tableblock frame-all grid-all" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">You</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Your users</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>easy start</p></li><li class="fragment"><p>rapid development</p></li><li class="fragment"><p>everything feels lean</p></li><li class="fragment"><p>everything feels principled and correct</p></li></ul></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>pay with longer compilation times</p></li><li class="fragment"><p>pay with less performant runtime</p></li><li class="fragment"><p>pay with more time spend if the code doesn&#8217;t work</p></li></ul></div></div></td></tr></table>
 <aside class="notes"><div class="paragraph"><p>When I look at this, and think of all the popular libraries based on that, I feel like they are:</p></div>
 <div class="ulist"><ul><li><p>widely-adopted</p></li><li><p>feature-rich</p></li><li><p>proof-of-concept-level quality</p></li><li><p>liabilities</p></li></ul></div></aside></div></section><section id="_macros"><h2>Macros</h2><div class="slide-content"><table class="tableblock frame-all grid-all small" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">You</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Your users</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>longer setup</p></li><li class="fragment"><p>no batteries included</p></li><li class="fragment"><p>development feel clunky</p></li><li class="fragment"><p>everything feels like a hack</p></li></ul></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p><em>may</em> get better compilation times (than alternatives)</p></li><li class="fragment"><p><em>may</em> get more performant runtime</p></li><li class="fragment"><p><em>may</em> get better errors messages</p></li><li class="fragment"><p><strong>or</strong> may get an undebugabble mess that cannot be understood even by the author</p></li></ul></div></div></td></tr></table>
 <aside class="notes"><div class="paragraph"><p>(Between <strong>may</strong> and <strong>or</strong>) - and our users deserve it!</p></div>
@@ -469,7 +475,7 @@ for type scala.Nothing</code></pre></div></div></div></td><td class="tableblock 
 <div class="paragraph"><p>then macros are the only game in town.</p></div>
 <div class="paragraph"><p>But with no guarantee of success.</p></div>
 <div class="paragraph"><p>It may sound unfounded, especially since Scala 3 macros are supposedly principled, so let&#8217;s take a look at some examples.</p></div></aside></div></section></section>
-<section><section id="_macros_api"><h2>Macros API</h2><div class="slide-content"><div class="paragraph"><p><strong>Opportunities for improvement</strong></p></div></div></section><section id="_quoting_and_splicing"><h2>Quoting and Splicing</h2><div class="slide-content"><table class="tableblock frame-all grid-all fragment" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 2 (Quasiquotes)</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 3 (Quotes)</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val expr1 =
+<section><section id="_macros_api"><h2>Macros API</h2><div class="slide-content"><div class="paragraph"><p><strong>Opportunities for improvement</strong></p></div><aside class="notes"><div class="paragraph"><p>Our first example would be&#8230;&#8203;</p></div></aside></div></section><section id="_quoting_and_splicing"><h2>Quoting and Splicing</h2><div class="slide-content"><table class="tableblock frame-all grid-all fragment" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 2 (Quasiquotes)</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 3 (Quotes)</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val expr1 =
   c.Expr[Int](q"21")
 val expr2 =
   c.Expr[Int](q"37")
@@ -485,7 +491,7 @@ val expr3 = '{
   ${ expr1 } + ${ expr2 }
 }</code></pre></div></div></div></td></tr></table>
 <aside class="notes"><div class="paragraph"><p>On Scala 2, if we want to use types, we are very verbose.</p></div>
-<div class="paragraph"><p>Types are not inferred, and we have to use <code>c.Type</code> and <code>c.Expr</code> to get them.</p></div>
+<div class="paragraph"><p>Types are not inferred, and we have to use <code>c.WeakTypeTag</code> and <code>c.Expr</code> to get them.</p></div>
 <div class="paragraph"><p>Quasiquotes are basically compile-time-checked string interpolation,
 so even though they are powerful and usually safe,
 we have no syntax highlighting, nor intellisense when writing them.</p></div>
@@ -550,7 +556,7 @@ c.Expr[Result](
   $expr match { ...${cases} }
   """
 )</code></pre></div></div></div></td><td class="tableblock halign-left valign-top"><div><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">def handleCase[
-  A: Tag
+  A: Type
 ](name: Expr[A]) = ...</code></pre></div></div>
 <div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/* for each case: */
 val name = Symbol.newBind(
@@ -610,7 +616,7 @@ if (sym.flags.is(Flags.Sealed)) {
       case _ =&gt; sub.typeRef
   ...
 } else { ... }</code></pre></div></div></div></td></tr></table>
-<aside class="notes"></aside></div></section><section><div class="slide-content"><table class="tableblock frame-all grid-all small" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 2 (Quasiquotes)</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 3 (Quotes)</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>glueing strings instead of typed code</p></li><li class="fragment"><p>but at least these string resemble the real code</p></li><li class="fragment"><p>and compiler checks them</p></li></ul></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>gluing expressions as every other real code</p></li><li class="fragment"><p>but it&#8217;s not an expression, we are gluing together untyped trees</p></li></ul></div></div></td></tr></table>
+<aside class="notes"></aside></div></section><section><div class="slide-content"><table class="tableblock frame-all grid-all small" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 2 (Quasiquotes)</p></td><td class="tableblock halign-left valign-top"><p class="tableblock">Scala 3 (Quotes)</p></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>gluing strings instead of typed code</p></li><li class="fragment"><p>but at least these strings resemble the real code</p></li><li class="fragment"><p>and compiler checks them</p></li></ul></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li class="fragment"><p>gluing expressions as every other real code</p></li><li class="fragment"><p>but it&#8217;s not an expression, we are gluing together untyped trees</p></li></ul></div></div></td></tr></table>
 <aside class="notes"><div class="paragraph"><p>It seems that the API is lacking.</p></div>
 <div class="paragraph"><p>What other issues we might have?</p></div></aside></div></section></section>
 <section id="_no_println_debugging"><h2>No <code>println</code> debugging</h2><div class="slide-content"><table class="tableblock frame-all grid-all small" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><p class="tableblock">Macro reporting</p></td><td class="tableblock halign-left valign-top"><div><div class="paragraph"><p><code>println</code></p></div></div></td></tr><tr><td class="tableblock halign-left valign-top"><div><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">c.echo("msg") // Scala 2
@@ -686,7 +692,9 @@ Type[A] match {
     ... // l is L and r is R in Either[L, R]
   case _ =&gt;
     ... // A is not an Option or Either
-}</code></pre></div></div></div></section><section id="_imagine_you_created_instances_like_this"><h2>Imagine you created instances like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">CaseClass.parse[A] match {
+}</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>Let us imagine this is also possible - we create a utility for applying and unapplying
+type parameters from the type, and it just works on both versions of Scala.</p></div></aside></div></section><section id="_imagine_you_created_instances_like_this"><h2>Imagine you created instances like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">CaseClass.parse[A] match {
   case Some(caseClass) =&gt;
    // A(summon[Arg1], summon[Arg2], ...)
    caseClass.construct { parameter =&gt;
@@ -704,7 +712,9 @@ Type[A] match {
   case None =&gt; MIO.fail(
     new Exception(s"Not a case class: ${Type.prettyPrint[A]}")
   )
-} // : MIO[Expr[A]]</code></pre></div></div></div></section><section id="_and_pattern_matched_like_this"><h2>And pattern-matched like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">Enum.parse[A] match {
+} // : MIO[Expr[A]]</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>We can also imagine that we have a Magnolia-like API but in the macro,
+so creating a new instance, would be much easier, and more high-level.</p></div></aside></div></section><section id="_and_pattern_matched_like_this"><h2>And pattern-matched like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">Enum.parse[A] match {
   case Some(enumm) =&gt;
 
     // expr match {
@@ -722,21 +732,28 @@ Type[A] match {
     }
 
   case None =&gt; Expr("")
-} // : MIO[Expr[String]]</code></pre></div></div></div></section><section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2><div class="slide-content"><div class="paragraph"><p>with <strong>Hearth</strong></p></div></div></section></section>
+} // : MIO[Expr[String]]</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>And similarly for enums, we can just get all of the subtypes with type parameters appliced
+that we could just patter-match.</p></div></aside></div></section><section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2><div class="slide-content"><div class="paragraph"><p>with <strong>Hearth</strong></p></div></div></section></section>
 <section id="_hearth"><h2>Hearth</h2><div class="slide-content"><table class="tableblock frame-all grid-all" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><div><div class="imageblock fragment"><img src="img/macro-in-macros.png" alt="Macro in macros"></div></div></td><td class="tableblock halign-left valign-top"><div><div class="imageblock fragment"><img src="img/compiler-plugin.png" alt="Compiler plugin"></div></div></td></tr></table>
 <aside class="notes"><div class="paragraph"><p>Hearth is a Proof-of-Concept library, that I&#8217;ve been working on for the last few months.</p></div>
 <div class="paragraph"><p>It aims to make it simpler to write macros.</p></div>
 <div class="paragraph"><p>Even if making it easier requires expanding macros in macros,
 or using a dedicated compiler plugin that works on untyped trees.</p></div></aside></div></section>
 <section><section id="_hearth_demo"><h2>Hearth demo</h2><div class="slide-content"><table class="tableblock frame-all grid-all small" style="width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><tbody><tr><td class="tableblock halign-left valign-top"><div><div class="paragraph"><p>Code at:</p></div>
-<div class="imageblock"><img src="img/qr-code-github.png" alt="Hearth GitHub repository"></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li><p><code>Show[A]</code> demo at <code>hearth-tests/src/</code></p></li><li><p><code>main/scala/demo/Show.scala</code></p></li><li><p><code>main/scala/demo/ShowMacrosImpl.scala</code></p></li><li><p><code>main/scala-2/demo/ShowCompanionCompat.scala</code></p></li><li><p><code>main/scala-3/demo/ShowCompanionCompat.scala</code></p></li><li><p><code>test/scala-3/demo/ShowSpec.scala</code></p></li></ul></div></div></td></tr></table></div></section><section id="_regular_code" class="small-h2"><h2>Regular code</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
+<div class="imageblock"><img src="img/qr-code-github.png" alt="Hearth GitHub repository"></div></div></td><td class="tableblock halign-left valign-top"><div><div class="ulist"><ul><li><p><code>Show[A]</code> demo at <code>hearth-tests/src/</code></p></li><li><p><code>main/scala/demo/Show.scala</code></p></li><li><p><code>main/scala/demo/ShowMacrosImpl.scala</code></p></li><li><p><code>main/scala-2/demo/ShowCompanionCompat.scala</code></p></li><li><p><code>main/scala-3/demo/ShowCompanionCompat.scala</code></p></li><li><p><code>test/scala-3/demo/ShowSpec.scala</code></p></li></ul></div></div></td></tr></table><aside class="notes"><div class="paragraph"><p>The code would use the the construct that we just used
+and in a what that we just used, so I&#8217;ll skip ahowing it again.</p></div>
+<div class="paragraph"><p>Reading a whole complete program is easier in your IDE than on a slide.</p></div>
+<div class="paragraph"><p>But I might highlight a few new things.</p></div></aside></div></section><section id="_regular_code" class="small-h2"><h2>Regular code</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
 trait Show[A] extends Show[A] {
 
   def show(value: A): String
 }
 
-object Show extends ShowCompanionCompat // Will provide .derived[A]</code></pre></div></div></div></section><section id="_cross_compilable_macro" class="small-h2"><h2>Cross-compilable macro</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
+object Show extends ShowCompanionCompat // Will provide .derived[A]</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>This is just good old non-macro code. The derivation was moved to <code>ShowCompanionCompat</code>,
+I&#8217;ll show in a moment why.</p></div></aside></div></section><section id="_cross_compilable_macro" class="small-h2"><h2>Cross-compilable macro</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
 import hearth.*
 import fp.effect.*, fp.instances.*, fp.syntax.*
@@ -755,10 +772,14 @@ private[demo] trait ShowMacrosImpl { this: MacroCommons =&gt;
     value: Expr[A]
   ): Expr[String] = ...
   // ...
-}</code></pre></div></div></div></section><section id="_adapters_necessary_for_now" class="small-h2"><h2>Adapters (necessary for now)</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
+}</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>This is our macro logic. We write it once, and use in 2 versions of Scala.</p></div>
+<div class="paragraph"><p>All of the APIs are provided in <code>MacroCommons</code> mix-in.</p></div>
+<div class="paragraph"><p>It&#8217;s only required if we want to generate also for Scala 2,
+if we are only interested in Scala 3 macros but with better API,
+then you&#8217;ll find a way of skipping creating a trait and mix-ing it in.</p></div></aside></div></section><section id="_adapters_necessary_for_now" class="small-h2"><h2>Adapters (necessary for now)</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox
+import scala.language.experimental.macros, scala.reflect.macros.blackbox
 
 private[demo] trait ShowCompanionCompat { this: Show.type =&gt;
 
@@ -768,7 +789,6 @@ private[demo] trait ShowCompanionCompat { this: Show.type =&gt;
 private[demo] class ShowMacros(val c: blackbox.Context)
     extends hearth.MacroCommonsScala2
     with ShowMacrosImpl {
-
   def deriveTypeClassImpl[A: c.WeakTypeTag]: c.Expr[Show[A]] = deriveTypeClass[A]
 }</code></pre></div></div>
 <div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
@@ -784,10 +804,14 @@ private[demo] class ShowMacros(q: Quotes)
     extends hearth.MacroCommonsScala3(using q), ShowMacrosImpl
 
 private[demo] object ShowMacros {
-
   def deriveTypeClass[A: Type](using q: Quotes): Expr[Show[A]] =
     new ShowMacros(q).deriveTypeClass[A]
-}</code></pre></div></div></div></section><section><div class="slide-content"><div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private[demo] sealed trait DerivationError
+}</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>Since we decided to make our macro cross-complable to Scala 2 and Scala 3
+via a mix-in, we have to mix it into something.</p></div>
+<div class="paragraph"><p>That&#8217;s why we have to write an adapter.</p></div>
+<div class="paragraph"><p>Currently it&#8217;s a bit of a boulerplace, but in the future we can have some
+macro annotation, or a compiler plugin, to get rid of it.</p></div></aside></div></section><section><div class="slide-content"><div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private[demo] sealed trait DerivationError
     extends scala.util.control.NoStackTrace
     with Product
     with Serializable
@@ -816,13 +840,28 @@ private[demo] object DerivationError {
        |Error logs:
        |$errorLogs
        |""".stripMargin
-  }</code></pre></div></div></div></section><section><div class="slide-content"><div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/** Idea:
+  }</code></pre></div></div>
+<aside class="notes"><div class="paragraph"><p>If we looked into the macro, we could also see that we made some utilities
+to express our logic easier - e.g. we wrote our own error types.</p></div>
+<div class="paragraph"><p>And then we can just run the code that would return these as errors,
+maybe even log something - so we can use these 2 utilities to:
+ * name the scope in the nested logging
+ * convert errors (and error log messages) into a single error message</p></div></aside></div></section><section><div class="slide-content"><div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">/** Idea:
   *   - successful Some -&gt; rule applies, attempt succeeded
   *   - successful None -&gt; rule doesn't apply, we should try the next one
   *   - failure -&gt; rule applies but it failed, we should fail the whole derivation
   * If none of the rules matched, then we fail derivation as well.
   */
 private type Attempt[A] = MIO[Option[Expr[A]]]</code></pre></div></div>
+<div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def attemptUsingImplicit[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsBuiltIn[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
+
+private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...</code></pre></div></div>
 <div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
   MIO.async { await =&gt;
     await {
@@ -838,16 +877,7 @@ private type Attempt[A] = MIO[Option[Expr[A]]]</code></pre></div></div>
     } getOrElse await {
       MIO.fail(DerivationError.UnsupportedType(Type.prettyPrint[A]))
     }
-  }</code></pre></div></div>
-<div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def attemptUsingImplicit[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsBuiltIn[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsIterable[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
-
-private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...</code></pre></div></div></div></section></section>
+  }</code></pre></div></div></div></section></section>
 <section><section id="_but_what_about_logging"><h2>But what about logging?</h2></section><section><div class="slide-content"><div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// inside Show companion
 sealed trait LogDerivation
 object LogDerivation extends LogDerivation</code></pre></div></div>
