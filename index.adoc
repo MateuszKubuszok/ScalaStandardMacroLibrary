@@ -15,6 +15,14 @@
 Before answering the question in the title, we need to explain a few more things.
 --
 
+== About me
+
+[%step]
+ * Scala developer for 10 years
+ * co-author of https://chimney.readthedocs.io[Chimney]
+ * blogged at https://kubuszok.com[Kubuszok.com]
+ * wrote https://leanpub.com/jvm-scala-book/[Things you need to know about JVM (that matter in Scala)]
+
 == What is a Macro?
 
 [NOTE.speaker]
@@ -172,7 +180,7 @@ a|
 [%step]
  * pay with longer compilation times
  * pay with less performant runtime
- * pay with more time spend if the code doesn't work
+ * pay with more time spent if the code doesn't work
 |===
 
 [NOTE.speaker]
@@ -376,6 +384,7 @@ Scala 2 is not perfect, we're gluing untyped `Tree`s, but at least it's consiste
 Scala 3, allows quoting and splicing, but only for whole expressions. Pieces that would build an expression have to be combined manually.
 --
 
+[.small-h2]
 === Constructing a Pattern Match
 
 [%step]
@@ -1151,3 +1160,5 @@ There is much to do there, and I don't consider it yet ready for a release.
 
 But it doesn't have to be Hearth, it might be some other library that takes us there, and maybe this pressentation inspired some of you to try.
 --
+
+== Thank you
