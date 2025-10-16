@@ -666,19 +666,19 @@ a.map2(b)(_ + _) // applicative syntax</code></pre></div></div>
 <aside class="notes"><div class="paragraph"><p>We could imagine that we can treat logging as a MIO effect.</p></div>
 <div class="paragraph"><p>And since we might decide to use spans, to give it some structure</p></div></aside></div></section><section id="_lets_assume_that_it_can_be_a_thing"><h2>Let&#8217;s assume that it can be a thing</h2><div class="slide-content"><div class="listingblock"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// Yet another utility, because .map/.flatMap
 // cannot handle this:
-MIO.async { await =&gt;
+MIO.scoped { runSafe =&gt;
 
   Expr.quote { // &lt;- instead of '{}/ q"..."
     new Show[A] {
 
      def show(a: A): String = Expr.splice {// &lt;- instead of ${}
-        await {
+        runSafe {
           deriveShowBody(Expr.quote{ a })// : MIO[Expr[String]]
-        }
+        } // : Expr[String]
       }
     }
-  }
-}</code></pre></div></div>
+  } // : Expr[Show[A]]
+} // : MIO[Expr[Show[A]]]</code></pre></div></div>
 <aside class="notes"><div class="paragraph"><p>Syntaxes for Quotes and Quasiquotes seems like something that cannot be reconciled.
 But let us imagine that they can.</p></div>
 <div class="paragraph"><p>Let us also imagine, that we have such a "direct style" available to us. Because
@@ -699,7 +699,7 @@ type parameters from the type, and it just works on both versions of Scala.</p><
   case Some(caseClass) =&gt;
    // A(summon[Arg1], summon[Arg2], ...)
    caseClass.construct { parameter =&gt;
-      import parameter.tpe.Underlying as Param
+      import parameter.tpe.Underlying as Param // &lt;- giving existential type a name!
 
       Expr.summonImplicit[Param] match {
         case Some(expr) =&gt; MIO.pure(expr)
@@ -717,22 +717,23 @@ type parameters from the type, and it just works on both versions of Scala.</p><
 <aside class="notes"><div class="paragraph"><p>We can also imagine that we have a Magnolia-like API but in the macro,
 so creating a new instance, would be much easier, and more high-level.</p></div></aside></div></section><section id="_and_pattern_matched_like_this"><h2>And pattern-matched like this:</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">Enum.parse[A] match {
   case Some(enumm) =&gt;
-
     // expr match {
     //   case b: B =&gt; "B" + " : " + b.toString
     //   ...
     // }
     enumm.matchOn(expr) { matchedSubtype =&gt;
       import matchedSubtype.{Underlying as B, value as b}
-      val bName = Expr(Type.simpleName[B])
+      // B &lt;- named existential type
+      // b: Expr[B]
+      val bName = Expr(B.simpleName) // Expr[String]
       MIO {
         Expr.quote {
-          Expr.splice { b } + " : " + Expr.splice { bName }
+          Expr.splice { bName } + " : " + Expr.splice { b }.toString
         }
       }
     }
 
-  case None =&gt; Expr("")
+  case None =&gt; MIO.pure(Expr("not an enum"))
 } // : MIO[Expr[String]]</code></pre></div></div>
 <aside class="notes"><div class="paragraph"><p>And similarly for enums, we can just get all of the subtypes with type parameters appliced
 that we could just patter-match.</p></div></aside></div></section><section id="_actually_its_already_possible"><h2>Actually, it&#8217;s already possible</h2><div class="slide-content"><div class="paragraph"><p>with <strong>Hearth</strong></p></div></div></section></section>
@@ -747,7 +748,7 @@ and in a what that we just used, so I&#8217;ll skip ahowing it again.</p></div>
 <div class="paragraph"><p>Reading a whole complete program is easier in your IDE than on a slide.</p></div>
 <div class="paragraph"><p>But I might highlight a few new things.</p></div></aside></div></section><section id="_regular_code" class="small-h2"><h2>Regular code</h2><div class="slide-content"><div class="listingblock small"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">package hearth.demo
 
-trait Show[A] extends Show[A] {
+trait Show[A] {
 
   def show(value: A): String
 }
@@ -823,25 +824,25 @@ private[demo] object DerivationError {
   ... // other cases
 }</code></pre></div></div>
 <div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
-  Log.namedScope(s"Derivation for Show[${Type.prettyPrint[A]}]") {
-    attemptAllRules[A](value) // &lt;- this is the core of the logic
-  }
-  .expandFinalResultOrFail(s"Show[${Type.prettyPrint[A]}]") {
-      (errorLogs, errors) =&gt;
-    val errorsStr = errors.toVector.map {
-      case DerivationError.UnsupportedType(typeName) =&gt;
-        s"Derivation of $typeName is not supported"
-      ... // other cases
-      case e =&gt;
-        s"Unexpected error: ${e.getMessage}:\n${e.getStackTrace.mkString("\n")}"
-    }.mkString("\n")
+  // This is the core of the logic:
+  attemptAllRules[A](value) // : MIO[Expr[String]]
+    // This runs IO and returns Expr[String] or fails with error message
+    .runToExprOrFail(s"Show[${Type.prettyPrint[A]}]") {
+        (errorLogs: String, errors: NonEmptyVector[Exception]) =&gt;
+      val errorsMessage = errors.toVector.map {
+        case DerivationError.UnsupportedType(typeName) =&gt;
+          s"Derivation of $typeName is not supported"
+        ... // other cases
+        case e =&gt;
+          s"Unexpected error: ${e.getMessage}:\n${e.getStackTrace.mkString("\n")}"
+      }.mkString("\n")
 
-    s"""Failed to derive Show[${Type.prettyPrint[A]}]:
-       |$errorsStr
-       |Error logs:
-       |$errorLogs
-       |""".stripMargin
-  }</code></pre></div></div>
+      s"""Failed to derive Show[${Type.prettyPrint[A]}]:
+        |$errorsMessage
+        |Error logs:
+        |$errorLogs
+        |""".stripMargin
+    } // : Expr[String]</code></pre></div></div>
 <aside class="notes"><div class="paragraph"><p>If we looked into the macro, we could also see that we made some utilities
 to express our logic easier - e.g. we wrote our own error types.</p></div>
 <div class="paragraph"><p>And then we can just run the code that would return these as errors,
@@ -864,18 +865,18 @@ private def attemptAsCaseClass[A: Type](value: Expr[A]): Attempt[String] = ...
 
 private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...</code></pre></div></div>
 <div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
-  MIO.async { await =&gt;
-    await {
+  MIO.scoped { runSafe =&gt;
+    runSafe {
       attemptUsingImplicit[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsBuiltIn[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsIterable[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsCaseClass[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsEnum[A](value)
-    } getOrElse await {
+    } getOrElse runSafe {
       MIO.fail(DerivationError.UnsupportedType(Type.prettyPrint[A]))
     }
   }</code></pre></div></div></div></section></section>
@@ -902,9 +903,10 @@ private def shouldWeLogDerivation: Boolean = {
   logDerivationImported || logDerivationSetGlobally
 }</code></pre></div></div>
 <div class="listingblock small fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// ...
-.expandFinalResultOrFail(
+.runToExprOrFail(
    s"Show[${Type.prettyPrint[A]}]"
-   renderInfoLogs = shouldWeLogDerivation) { // &lt;- enable conditional logging
+   infoRendering = if (shouldWeLogDerivation) RenderFrom(Log.Level.Info)
+                   else DontRender) { // &lt;- enable conditional logging
 // ...</code></pre></div></div></div></section><section><div class="slide-content"><div class="imageblock"><img src="img/logging-terminal.png" alt="Log in terminal"></div></div></section><section><div class="slide-content"><div class="imageblock"><img src="img/logging-vscode.png" alt="Log in VS Code"></div></div></section></section>
 <section id="_summary"><h2>Summary</h2><div class="slide-content"><aside class="notes"><div class="paragraph"><p>I hope that I managed to show why good macros could be a better alternative to the Shapeless/Mirrors/etc.</p></div>
 <div class="paragraph"><p>I also hope I managed to explain why currently, they are not so easy to use.</p></div>

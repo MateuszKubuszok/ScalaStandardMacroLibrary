@@ -690,19 +690,19 @@ And since we might decide to use spans, to give it some structure
 --
 // Yet another utility, because .map/.flatMap
 // cannot handle this:
-MIO.async { await =>
+MIO.scoped { runSafe =>
 
   Expr.quote { // <- instead of '{}/ q"..."
     new Show[A] {
 
      def show(a: A): String = Expr.splice {// <- instead of ${}
-        await {
+        runSafe {
           deriveShowBody(Expr.quote{ a })// : MIO[Expr[String]]
-        }
+        } // : Expr[String]
       }
     }
-  }
-}
+  } // : Expr[Show[A]]
+} // : MIO[Expr[Show[A]]]
 --
 
 [NOTE.speaker]
@@ -747,7 +747,7 @@ CaseClass.parse[A] match {
   case Some(caseClass) =>
    // A(summon[Arg1], summon[Arg2], ...)
    caseClass.construct { parameter =>
-      import parameter.tpe.Underlying as Param
+      import parameter.tpe.Underlying as Param // <- giving existential type a name!
 
       Expr.summonImplicit[Param] match {
         case Some(expr) => MIO.pure(expr)
@@ -777,22 +777,23 @@ so creating a new instance, would be much easier, and more high-level.
 --
 Enum.parse[A] match {
   case Some(enumm) =>
-
     // expr match {
     //   case b: B => "B" + " : " + b.toString
     //   ...
     // }
     enumm.matchOn(expr) { matchedSubtype =>
       import matchedSubtype.{Underlying as B, value as b}
-      val bName = Expr(Type.simpleName[B])
+      // B <- named existential type
+      // b: Expr[B]
+      val bName = Expr(B.simpleName) // Expr[String]
       MIO {
         Expr.quote {
-          Expr.splice { b } + " : " + Expr.splice { bName }
+          Expr.splice { bName } + " : " + Expr.splice { b }.toString
         }
       }
     }
 
-  case None => Expr("")
+  case None => MIO.pure(Expr("not an enum"))
 } // : MIO[Expr[String]]
 --
 
@@ -864,7 +865,7 @@ But I might highlight a few new things.
 --
 package hearth.demo
 
-trait Show[A] extends Show[A] {
+trait Show[A] {
 
   def show(value: A): String
 }
@@ -994,25 +995,25 @@ private[demo] object DerivationError {
 [source, scala]
 --
 private def deriveOrFail[A: Type](value: Expr[A]): Expr[String] =
-  Log.namedScope(s"Derivation for Show[${Type.prettyPrint[A]}]") {
-    attemptAllRules[A](value) // <- this is the core of the logic
-  }
-  .expandFinalResultOrFail(s"Show[${Type.prettyPrint[A]}]") {
-      (errorLogs, errors) =>
-    val errorsStr = errors.toVector.map {
-      case DerivationError.UnsupportedType(typeName) =>
-        s"Derivation of $typeName is not supported"
-      ... // other cases
-      case e =>
-        s"Unexpected error: ${e.getMessage}:\n${e.getStackTrace.mkString("\n")}"
-    }.mkString("\n")
+  // This is the core of the logic:
+  attemptAllRules[A](value) // : MIO[Expr[String]]
+    // This runs IO and returns Expr[String] or fails with error message
+    .runToExprOrFail(s"Show[${Type.prettyPrint[A]}]") {
+        (errorLogs: String, errors: NonEmptyVector[Exception]) =>
+      val errorsMessage = errors.toVector.map {
+        case DerivationError.UnsupportedType(typeName) =>
+          s"Derivation of $typeName is not supported"
+        ... // other cases
+        case e =>
+          s"Unexpected error: ${e.getMessage}:\n${e.getStackTrace.mkString("\n")}"
+      }.mkString("\n")
 
-    s"""Failed to derive Show[${Type.prettyPrint[A]}]:
-       |$errorsStr
-       |Error logs:
-       |$errorLogs
-       |""".stripMargin
-  }
+      s"""Failed to derive Show[${Type.prettyPrint[A]}]:
+        |$errorsMessage
+        |Error logs:
+        |$errorLogs
+        |""".stripMargin
+    } // : Expr[String]
 --
 
 [NOTE.speaker]
@@ -1060,18 +1061,18 @@ private def attemptAsEnum[A: Type](value: Expr[A]): Attempt[String] = ...
 [source, scala]
 --
 private def attemptAllRules[A: Type](value: Expr[A]): MIO[Expr[String]] =
-  MIO.async { await =>
-    await {
+  MIO.scoped { runSafe =>
+    runSafe {
       attemptUsingImplicit[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsBuiltIn[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsIterable[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsCaseClass[A](value)
-    } orElse await {
+    } orElse runSafe {
       attemptAsEnum[A](value)
-    } getOrElse await {
+    } getOrElse runSafe {
       MIO.fail(DerivationError.UnsupportedType(Type.prettyPrint[A]))
     }
   }
@@ -1126,9 +1127,10 @@ private def shouldWeLogDerivation: Boolean = {
 [source, scala]
 --
 // ...
-.expandFinalResultOrFail(
+.runToExprOrFail(
    s"Show[${Type.prettyPrint[A]}]"
-   renderInfoLogs = shouldWeLogDerivation) { // <- enable conditional logging
+   infoRendering = if (shouldWeLogDerivation) RenderFrom(Log.Level.Info)
+                   else DontRender) { // <- enable conditional logging
 // ...
 --
 
